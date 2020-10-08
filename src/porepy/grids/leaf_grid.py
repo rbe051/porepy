@@ -137,11 +137,11 @@ class CartLeafGrid(pp.CartGrid):
         h.block_cell_centers = copy.deepcopy(self.block_cell_centers)
         h.block_cell_volumes = copy.deepcopy(self.block_cell_volumes)
 
-        h.cell_level = self.cell_level
+        h.cell_level = self.cell_level.copy()
 
-        h.active_cells = self.active_cells
-        h.active_faces = self.active_faces
-        h.active_nodes = self.active_nodes
+        h.active_cells = self.active_cells.copy()
+        h.active_faces = self.active_faces.copy()
+        h.active_nodes = self.active_nodes.copy()
         return h
 
     def cell_proj_level(self, level0, level1):
