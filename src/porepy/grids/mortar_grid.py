@@ -49,7 +49,7 @@ class MortarGrid:
         self,
         dim: int,
         side_grids: Dict[int, pp.Grid],
-        face_cells: sps.spmatrix,
+        master_slave: sps.spmatrix,
         name: str = "",
         face_duplicate_ind: Optional[np.ndarray] = None,
         tol: float = 1e-6,
@@ -68,7 +68,7 @@ class MortarGrid:
         Parameters:
             dim (int): grid dimension
             side_grids (dictionary of Grid): grid on each side.
-            face_cells (sps.csc_matrix): Cell-face relations between the higher
+            master_slave (sps.csc_matrix): Cell-face relations between the higher
                 dimensional grid and the lower dimensional grid.
             name (str): Name of the grid. Can also be used to set various information on
                 the grid.
@@ -110,51 +110,37 @@ class MortarGrid:
         self.cell_centers: np.ndarray = np.hstack(
             [g.cell_centers for g in self.side_grids.values()]
         )
-
-        # face_cells mapping from the higher dimensional grid to the mortar grid
-        # also here we assume that, in the beginning the mortar grids are equal
-        # to the co-dimensional grid. If this assumption is not satisfied we
+        # master_slave is a mapping from the faces of the slave grid to the
+        # faces of the master grid.
+        # We assume that, in the beginning the mortar grids are equal
+        # to the slave grid. If this assumption is not satisfied we
         # need to change the following lines
+        slave_f, master_f, data = sps.find(master_slave)
 
-        # Creation of the high_to_mortar_int, basically we start from the face_cells
-        # map and we split the relation
-        # low_dimensional_cell -> 2 high_dimensional_face
-        # as
-        # low_dimensional_cell -> high_dimensional_face
-        # The mapping consider the cell ids of the second mortar grid shifted by
-        # the g.num_cells of the first grid. We keep this convention through the
-        # implementation. The ordering is given by sides or the keys of
-        # side_grids.
+        # It is assumed that the cells of the given mortar grid are ordered
+        # by the slave side index
+        ix = np.argsort(slave_f)
+        slave_f = slave_f[ix]
+        master_f = master_f[ix]
+        data = data[ix]
 
-        # Number of cells in the first mortar grid
-        num_cells = list(self.side_grids.values())[0].num_cells
-        cells, faces, data = sps.find(face_cells)
-        if self.num_sides() == 2:
+        # Define mappings
+        cells = np.arange(slave_f.size)
+        if not self.num_cells == cells.size:
+            raise ValueError(
+                """In the construction of Boundary mortar it is assumed
+            to be a one to one mapping between the mortar grid and the contact faces of
+            the slave grid"""
+            )
 
-            # Depending on the numbering of the faces, some work may be needed to place
-            # oposing mortar cells on each side of the lower-dimensional grid.
-            # At the end of this if-else, the first num_cells are on one side, the
-            # rest is on the other side.
-            if face_duplicate_ind is None:
-                # This is a tacit assumption on the numbering scheme for split faces,
-                # all faces on one side of the mortar grid should be indexed first,
-                # the their duplicate on the other side of the fracture.
-                cells_on_second_side = faces > np.median(faces)
-                cells[cells_on_second_side] += num_cells
-            else:
-                cells_on_second_side = np.in1d(faces, face_duplicate_ind)
-                cells[cells_on_second_side] += num_cells
-
-        shape = (num_cells * self.num_sides(), face_cells.shape[1])
-        self._master_to_mortar_int: sps.spmatrix = sps.csc_matrix(
-            (data.astype(np.float), (cells, faces)), shape=shape
+        shape_master = (self.num_cells, master_slave.shape[1])
+        shape_slave = (self.num_cells, master_slave.shape[0])
+        self._master_to_mortar_int = sps.csc_matrix(
+            (data.astype(np.float), (cells, master_f)), shape=shape_master
         )
-
-        # cell_cells mapping from the mortar grid to the lower dimensional grid.
-        # It is composed by two identity matrices since we are assuming matching
-        # grids here.
-        identity = [[sps.identity(num_cells)]] * self.num_sides()
-        self._slave_to_mortar_int: sps.spmatrix = sps.bmat(identity, format="csc")
+        self._slave_to_mortar_int = sps.csc_matrix(
+            (data.astype(np.float), (cells, slave_f)), shape=shape_slave
+        )
 
     def __repr__(self) -> str:
         """
