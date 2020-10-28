@@ -204,7 +204,7 @@ def _cart_grid_3d(fracs, nx, physdims=None):
     return grids
 
 
-def _cart_grid_2d(fracs, nx, physdims=None):
+def _cart_grid_2d(fracs, nx, physdims=None, GridType=pp.CartGrid):
     """
     Create grids for a domain with possibly intersecting fractures in 2d.
 
@@ -220,7 +220,8 @@ def _cart_grid_2d(fracs, nx, physdims=None):
     nx (np.ndarray): Number of cells in each direction. Should be 2D.
     physdims (np.ndarray): Physical dimensions in each direction.
         Defaults to same as nx, that is, cells of unit size.
-
+    GridType (Grid Class): Defaults to CartGrid. The grid class must accept
+        generator GridType(nx, physdims=physdims)
     Returns
     -------
     list (length 3): For each dimension (2 -> 0), a list of all grids in
@@ -241,7 +242,7 @@ def _cart_grid_2d(fracs, nx, physdims=None):
     else:
         physdims = np.asarray(physdims)
 
-    g_2d = pp.CartGrid(nx, physdims=physdims)
+    g_2d = GridType(nx, physdims=physdims)
     g_2d.global_point_ind = np.arange(g_2d.num_nodes)
     g_2d.compute_geometry()
     g_1d = []
