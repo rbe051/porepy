@@ -207,11 +207,11 @@ def _nodes_per_face(g):
         n_per_face = 4
     elif "TetrahedralGrid" in g.name:
         n_per_face = 3
-    elif ("TensorGrid" in g.name or "CartGrid" in g.name) and g.dim == 2:
+    elif ("TensorGrid" in g.name or "CartGrid" in g.name or "CartLeafGrid" in g.name) and g.dim == 2:
         n_per_face = 2
     elif "TriangleGrid" in g.name:
         n_per_face = 2
-    elif ("TensorGrid" in g.name or "CartGrid" in g.name) and g.dim == 1:
+    elif ("TensorGrid" in g.name or "CartGrid" in g.name or "CartLeafGrid" in g.name) and g.dim == 1:
         n_per_face = 1
     else:
         raise ValueError(
