@@ -30,12 +30,13 @@ logging level to DEBUG.
 NOTE: This module should be considered an experimental feature, which will likely
 undergo major changes (or be deleted).
 """
-import numpy as np
-import porepy as pp
 import logging
 import time
 from typing import Dict
 
+import numpy as np
+
+import porepy as pp
 import porepy.models.contact_mechanics_biot_model as parent_model
 from porepy.utils.derived_discretizations import implicit_euler as IE_discretizations
 
@@ -120,8 +121,7 @@ class THM(parent_model.ContactMechanicsBiot):
                 )
 
     def set_scalar_parameters(self) -> None:
-        """ Set parameters for the pressure / mass conservation equation.
-        """
+        """Set parameters for the pressure / mass conservation equation."""
         # Most values are handled as if this was a poro-elastic problem
         super().set_scalar_parameters()
         for g, d in self.gb:
@@ -138,9 +138,10 @@ class THM(parent_model.ContactMechanicsBiot):
             )
 
     def set_temperature_parameters(self) -> None:
-        """ Parameters for the temperature equation.
-        """
-        tensor_scale: float = self.temperature_scale / self.length_scale ** 2 / self.T_0_Kelvin
+        """Parameters for the temperature equation."""
+        tensor_scale: float = (
+            self.temperature_scale / self.length_scale ** 2 / self.T_0_Kelvin
+        )
         kappa: float = 1 * tensor_scale
         heat_capacity = 1
         mass_weight: float = heat_capacity * self.temperature_scale / self.T_0_Kelvin
@@ -191,13 +192,13 @@ class THM(parent_model.ContactMechanicsBiot):
 
             a_l = self.aperture(g_l)
             v_h = (
-                mg.master_to_mortar_avg()
+                mg.primary_to_mortar_avg()
                 * np.abs(g_h.cell_faces)
                 * self.specific_volume(g_h)
             )  #
             # Division by a/2 may be thought of as taking the gradient in the normal
             # direction of the fracture.
-            normal_diffusivity = kappa * 2 / (mg.slave_to_mortar_avg() * a_l)
+            normal_diffusivity = kappa * 2 / (mg.secondary_to_mortar_avg() * a_l)
             # The interface flux is to match fluxes across faces of g_h,
             # and therefore need to be weighted by the corresponding
             # specific volumes
@@ -410,7 +411,7 @@ class THM(parent_model.ContactMechanicsBiot):
             pp.set_iterate(d, iterate)
 
     def compute_fluxes(self) -> None:
-        """ Compute the fluxes in the mixed-dimensional grid from the current state of
+        """Compute the fluxes in the mixed-dimensional grid from the current state of
         the pressure variables.
 
         """
@@ -455,8 +456,7 @@ class THM(parent_model.ContactMechanicsBiot):
         d[pp.STATE]["stress"] += matrix_dictionary["grad_p"] * T
 
     def discretize(self) -> None:
-        """ Discretize all terms
-        """
+        """Discretize all terms"""
         if not hasattr(self, "assembler"):
             self.assembler = pp.Assembler(self.gb)
 
@@ -516,8 +516,7 @@ class THM(parent_model.ContactMechanicsBiot):
         logger.info("Done. Elapsed time {}".format(time.time() - tic))
 
     def before_newton_iteration(self) -> None:
-        """ Re-discretize the nonlinear terms
-        """
+        """Re-discretize the nonlinear terms"""
         self.compute_fluxes()
         terms = [
             self.friction_coupling_term,

@@ -1,13 +1,19 @@
 """
 Various FV specific utility functions.
+
+Implementation note: This could perhaps have been implemneted as a superclass
+for MPxA discertizations, however, due to the somewhat intricate inheritance relation
+between these methods, the current structure with multiple auxiliary methods emerged.
+
 """
+from typing import Any, Callable, Dict, Generator, List, Optional, Tuple
+
 import numpy as np
 import scipy.sparse as sps
-from typing import Tuple, Any, Generator, Dict, Optional
 
 import porepy as pp
-from porepy.utils import matrix_compression, mcolon
 from porepy.grids.grid_bucket import GridBucket
+from porepy.utils import matrix_compression, mcolon
 
 
 class SubcellTopology(object):
@@ -86,26 +92,31 @@ class SubcellTopology(object):
         # The left and right faces should be intrepreted as one face topologically.
         # The face_nodes and cell_faces maps in the grid geometry does not consider
         # this. We therefore have to merge the left subfaces with the right subfaces.
-        if hasattr(g, "per_map"):
-            sorted_left = np.sort(g.per_map[0])
-            sorted_right = np.sort(g.per_map[1])
+        if hasattr(g, "periodic_face_map"):
+            sorted_left = np.sort(g.periodic_face_map[0])
+            sorted_right = np.sort(g.periodic_face_map[1])
             # It should be straightforward to generalize to the case where the faces
-            # are not sorted. You have to first sort g.per_map[0] and g.per_map[1],
-            # then use the two sorted arrays to find the left and right subfaces, then
-            # map the subfaces back to the original g.per_map.
-            if not np.allclose(sorted_left, g.per_map[0]):
+            # are not sorted. You have to first sort g.periodic_face_map[0] and
+            # g.periodic_face_map[1], then use the two sorted arrays to find the left
+            # and right subfaces, then map the subfaces back to the original
+            # g.periodic_face_map.
+            if not np.allclose(sorted_left, g.periodic_face_map[0]):
                 raise NotImplementedError(
                     "Can not create subcell topology for periodic faces that are not sorted"
                 )
-            if not np.allclose(sorted_right, g.per_map[1]):
+            if not np.allclose(sorted_right, g.periodic_face_map[1]):
                 raise NotImplementedError(
                     "Can not create subcell topology for periodic faces that are not sorted"
                 )
-            left_subfaces = np.where(np.isin(faces_duplicated, g.per_map[0]))[0]
-            right_subfaces = np.where(np.isin(faces_duplicated, g.per_map[1]))[0]
+            left_subfaces = np.where(np.isin(faces_duplicated, g.periodic_face_map[0]))[
+                0
+            ]
+            right_subfaces = np.where(
+                np.isin(faces_duplicated, g.periodic_face_map[1])
+            )[0]
             # We loose the ordering of g.per map using np.isin. But since we have assumed
-            # g.per_map[0] and g.per_map[1] to be sorted, we can easily retrive the ordering
-            # by this trick:
+            # g.periodic_face_map[0] and g.periodic_face_map[1] to be sorted, we can easily
+            # retrive the ordering by this trick:
             left_subfaces = left_subfaces[np.argsort(faces_duplicated[left_subfaces])]
             right_subfaces = right_subfaces[
                 np.argsort(faces_duplicated[right_subfaces])
@@ -269,7 +280,7 @@ def compute_dist_face_cell(g, subcell_topology, eta, return_paired=True):
 
 
 def determine_eta(g):
-    """ Set default value for the location of continuity point eta in MPFA and
+    """Set default value for the location of continuity point eta in MPFA and
     MSPA.
 
     The function is intended to give a best estimate of eta in cases where the
@@ -299,7 +310,7 @@ def determine_eta(g):
 def find_active_indices(
     parameter_dictionary: Dict[str, Any], g: pp.Grid
 ) -> Tuple[np.ndarray, np.ndarray]:
-    """ Process information in parameter dictionary on whether the discretization
+    """Process information in parameter dictionary on whether the discretization
     should consider a subgrid. Look for fields in the parameter dictionary called
     specified_cells, specified_faces or specified_nodes. These are then processed by
     the function pp.fvutils.cell-ind_for_partial_update.
@@ -348,15 +359,17 @@ def find_active_indices(
 
 def subproblems(
     g: pp.Grid, max_memory: int, peak_memory_estimate: int
-) -> Generator[Any, None, None]:
+) -> Generator[
+    Tuple[pp.Grid, np.ndarray, np.ndarray, np.ndarray, np.ndarray], None, None
+]:
 
     if g.dim == 0:
         # nothing realy to do here
         loc_faces = np.ones(g.num_faces, dtype=bool)
         loc_cells = np.ones(g.num_cells, dtype=bool)
-        loc2g_cells = sps.eye(g.num_cells, dtype=bool)
-        loc2g_face = sps.eye(g.num_faces, dtype=bool)
-        return g, loc_faces, loc_cells, loc2g_cells, loc2g_face
+        loc2g_cells = np.ones(g.num_cells, dtype=bool)
+        loc2g_face = np.ones(g.num_faces, dtype=bool)
+        yield g, loc_faces, loc_cells, loc2g_cells, loc2g_face
 
     num_part: int = np.ceil(peak_memory_estimate / max_memory).astype(np.int)
 
@@ -488,8 +501,7 @@ def invert_diagonal_blocks(mat, s, method=None):
         return v
 
     def invert_diagonal_blocks_cython(a, size):
-        """ Invert block diagonal matrix using code wrapped with cython.
-        """
+        """Invert block diagonal matrix using code wrapped with cython."""
         try:
             import porepy.numerics.fv.cythoninvert as cythoninvert
         except ImportError:
@@ -962,9 +974,7 @@ def zero_out_sparse_rows(A, rows, diag=None):
 
     """
 
-    if not A.getformat() == "csr":
-        raise ValueError("Can only zero out sparse rows for csr matrix")
-
+    #    A.tocsr()
     ip = A.indptr
     row_indices = mcolon.mcolon(ip[rows], ip[rows + 1])
     A.data[row_indices] = 0
@@ -977,11 +987,8 @@ def zero_out_sparse_rows(A, rows, diag=None):
     return A
 
 
-# -----------------------------------------------------------------------------
-
-
 class ExcludeBoundaries(object):
-    """ Wrapper class to store mappings needed in the finite volume discretizations.
+    """Wrapper class to store mappings needed in the finite volume discretizations.
     The original use for this class was for exclusion of equations that are
     redundant due to the presence of boundary conditions, hence the name. The use of
     this class has increased to also include linear transformation that can be applied
@@ -1248,7 +1255,7 @@ class ExcludeBoundaries(object):
         return self.exclude_rob_dir * other
 
     def exclude_boundary(self, other, transform=False):
-        """ Mapping to exclude faces/component with any boundary condition from
+        """Mapping to exclude faces/component with any boundary condition from
         local systems.
 
         Parameters:
@@ -1302,13 +1309,177 @@ class ExcludeBoundaries(object):
 # -----------------End of class ExcludeBoundaries-----------------------------
 
 
+def partial_update_discretization(
+    g: pp.Grid,  # Grid
+    data: Dict,  # full data dictionary for this grid
+    keyword: str,  # keyword for the target discretization
+    discretize: Callable,  # Discretization operation
+    dim: Optional[int] = None,  # dimension. Used to expand vector quantities
+    scalar_cell_right: Optional[List[str]] = None,  # See method documentation
+    vector_cell_right: Optional[List[str]] = None,
+    scalar_face_right: Optional[List[str]] = None,
+    vector_face_right: Optional[List[str]] = None,
+    scalar_cell_left: Optional[List[str]] = None,
+    vector_cell_left: Optional[List[str]] = None,
+    scalar_face_left: Optional[List[str]] = None,
+    vector_face_left: Optional[List[str]] = None,
+    second_keyword: Optional[str] = None,  # Used for biot discertization
+) -> None:
+    """Do partial update of discretization scheme.
+
+    This is intended as a helper function for the update_discretization methods of
+    fv schemes. In particular, this method allows for a unified implementation of
+    update in mpfa, mpsa and biot.
+
+    The implementation is somewhat heavy to cover both mpfa, mpsa and biot.
+
+    Parameters scalar_cell_right, vector_face_left etc. are lists of keys in the
+    discretization matrix dictionary. They are used to tell whehter the matrix should
+    be considered a cell or face quantity, and scalar of vector. Left and right are
+    used to map rows and columns, respectively.
+    Together these fields allows for mapping a discretization between grids.
+
+    """
+    # Process input
+    if scalar_cell_right is None:
+        scalar_cell_right = []
+    if vector_cell_right is None:
+        vector_cell_right = []
+    if scalar_face_right is None:
+        scalar_face_right = []
+    if vector_face_right is None:
+        vector_face_right = []
+    if scalar_cell_left is None:
+        scalar_cell_left = []
+    if vector_cell_left is None:
+        vector_cell_left = []
+    if scalar_face_left is None:
+        scalar_face_left = []
+    if vector_face_left is None:
+        vector_face_left = []
+
+    if dim is None:
+        dim = g.dim
+
+    update_info = data["update_discretization"]
+    # By default, neither cells nor faces have been updated
+    update_cells = update_info.get("modified_cells", np.array([], dtype=np.int))
+    update_faces = update_info.get("modified_faces", np.array([], dtype=np.int))
+
+    # Mappings of cells and faces. Default to identity maps
+    cell_map = update_info.get("map_cells", sps.identity(g.num_cells))
+    face_map = update_info.get("map_faces", sps.identity(g.num_faces))
+
+    # left cell quantities (known example: div_u term in Biot), are a bit special
+    # in that they require expanded computational stencils.
+    # To see this, consider an update of a single cell. For a left face quantity,
+    # this would require update of the neighboring faces, as will be detected by the
+    # cell_ind_for_partial_update below. The necessary update to nearby cells would
+    # be achieved by the subsequent multiplication with a divergence. For left cell
+    # matrices, the latter step is not available, thus the necessary overlap in
+    # stencil must be explicitly set.
+    if len(vector_cell_left) > 0 or len(scalar_cell_left) > 0:
+        update_cells = pp.partition.overlap(g, update_cells, 1)
+
+        # We will need the non-updated cells as well (but not faces, for similar
+        # reasons as outlined above).
+        passive_cells = np.setdiff1d(np.arange(g.num_cells), update_cells)
+
+    do_discretize = False
+    # The actual discretization stencil may be larger than the modified cells and
+    # faces (if specified).
+    _, active_faces = pp.fvutils.cell_ind_for_partial_update(
+        g, cells=update_cells, faces=update_faces
+    )
+    active_faces = np.unique(active_faces)
+
+    param = data[pp.PARAMETERS][keyword]
+    if update_cells.size > 0:
+        param["specified_cells"] = update_cells
+        do_discretize = True
+    if update_faces.size > 0:
+        param["specified_faces"] = update_faces
+        do_discretize = True
+
+    # Loop over all existing discretization matrices. Map rows and columns,
+    # according to the left/right, cell/face and scalar/vector specifications.
+    # Also eliminate contributions to rows that will also be updated (but not
+    # columns, a non-updated row should keep its information about a column
+    # to be updated).
+    mat_dict = data[pp.DISCRETIZATION_MATRICES][keyword]
+    mat_dict_copy = {}
+    for key, val in mat_dict.items():
+        mat = val
+
+        # First multiplication from the right
+        if key in scalar_cell_right:
+            mat = mat * cell_map.T
+        elif key in vector_cell_right:
+            mat = mat * sps.kron(cell_map.T, sps.eye(dim))
+        elif key in scalar_face_right:
+            mat = mat * face_map.T
+        elif key in vector_face_right:
+            mat = mat * sps.kron(face_map.T, sps.eye(dim))
+        else:
+            raise KeyError(f"Unknown right mapping for key {key} with matrix {mat}")
+
+        # Mapping of faces. Enforce csr format to enable elimination of rows below.
+        if key in scalar_cell_left:
+            mat = cell_map * mat
+            # Zero out existing contributions from the active faces. This is necessary
+            # due to the expansive computational stencils for MPxA methods.
+            pp.fvutils.remove_nonlocal_contribution(update_cells, 1, mat)
+        elif key in vector_cell_left:
+            # Need a tocsr() here to work with row-based elimination
+            mat = (sps.kron(cell_map, sps.eye(dim)) * mat).tocsr()
+            pp.fvutils.remove_nonlocal_contribution(update_cells, dim, mat)
+        elif key in scalar_face_left:
+            mat = face_map * mat
+            pp.fvutils.remove_nonlocal_contribution(active_faces, 1, mat)
+        elif key in vector_face_left:
+            mat = (sps.kron(face_map, sps.eye(dim)) * mat).tocsr()
+            pp.fvutils.remove_nonlocal_contribution(active_faces, dim, mat)
+        else:
+            raise KeyError(f"Unknown left mapping for key {key} with matrix {mat}")
+
+        mat_dict_copy[key] = mat
+
+    # Do the actual discretization
+    if do_discretize:
+        discretize(g, data)
+
+    # Define new discretization as a combination of mapped and rediscretized
+    for key, val in data[pp.DISCRETIZATION_MATRICES][keyword].items():
+        if val.shape == mat_dict_copy[key].shape:
+            data[pp.DISCRETIZATION_MATRICES][keyword][key] = mat_dict_copy[key] + val
+
+    # The Biot discretization is special, in that it places part of matrices in
+    # the mechanics dictionary, a second part in flow. If a second keyword is provided,
+    # the corresponding matrices must be processed, and added with the stored, mapped
+    # values.
+    # Implementation note: we assume that the previous discretizations are all placed
+    # under the primary keyword, see Biot for an example of the necessary pre-processing.
+    # It could perhaps have been better allow for processing of two keywords in the
+    # mapping, but the implementation ended up being as it is.
+    if second_keyword is not None:
+        for key, val in data[pp.DISCRETIZATION_MATRICES][second_keyword].items():
+            if key in mat_dict_copy.keys():
+                if key in scalar_cell_left:
+                    remove_nonlocal_contribution(passive_cells, 1, val)
+                elif key in vector_cell_left:
+                    remove_nonlocal_contribution(passive_cells, dim, val)
+                data[pp.DISCRETIZATION_MATRICES][second_keyword][key] = (
+                    mat_dict_copy[key] + val
+                )
+
+
 def cell_ind_for_partial_update(
     g: pp.Grid,
     cells: np.ndarray = None,
     faces: np.ndarray = None,
     nodes: np.ndarray = None,
 ) -> Tuple[np.ndarray, np.ndarray]:
-    """ Obtain indices of cells and faces needed for a partial update of the
+    """Obtain indices of cells and faces needed for a partial update of the
     discretization stencil.
 
     Implementation note: This function should really be split into three parts,
@@ -1496,7 +1667,7 @@ def map_subgrid_to_grid(
     is_vector: bool,
     nd: Optional[int] = None,
 ) -> Tuple[np.ndarray, np.ndarray]:
-    """ Obtain mappings from the cells and faces of a subgrid back to a larger grid.
+    """Obtain mappings from the cells and faces of a subgrid back to a larger grid.
 
     Parameters:
         g (pp.Grid): The larger grid.
@@ -1661,7 +1832,7 @@ def compute_darcy_flux(
         bound_flux = d_h[pp.DISCRETIZATION_MATRICES][keyword]["bound_flux"]
         induced_flux = (
             bound_flux
-            * d["mortar_grid"].mortar_to_master_int()
+            * d["mortar_grid"].mortar_to_primary_int()
             * extract_variable(d, lam_name)
         )
         # Remove contribution directly on the boundary faces.

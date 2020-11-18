@@ -2,17 +2,21 @@
 more information.
 
 """
+from typing import Any, Dict, Tuple, Union
+
 import numpy as np
 import scipy.sparse as sps
+
 import porepy as pp
-from typing import Union, Tuple, Any, Dict
-
 from porepy.grids import grid, grid_bucket
-
-
-from porepy.utils import matrix_compression, mcolon, accumarray, setmembership
-from porepy.utils import half_space, tags
-
+from porepy.utils import (
+    accumarray,
+    half_space,
+    matrix_compression,
+    mcolon,
+    setmembership,
+    tags,
+)
 
 # ------------------------------------------------------------------------------#
 
@@ -20,7 +24,7 @@ from porepy.utils import half_space, tags
 def coarsen(
     g: Union[pp.Grid, pp.GridBucket], method: str, **method_kwargs
 ) -> Union[None, sps.spmatrix]:
-    """ Create a coarse grid from a given grid. If a grid bucket is passed the
+    """Create a coarse grid from a given grid. If a grid bucket is passed the
     procedure is applied to the higher in dimension.
     Note: the grid is modified in place.
     Note: do not call compute_geometry afterward.
@@ -47,14 +51,14 @@ def coarsen(
     else:
         raise ValueError("Undefined coarsening algorithm")
 
-    generate_coarse_grid(g, partition)
+    return generate_coarse_grid(g, partition)
 
 
 # ------------------------------------------------------------------------------#
 
 
 def generate_coarse_grid(g, subdiv):
-    """ Generate a coarse grid clustering the cells according to the flags
+    """Generate a coarse grid clustering the cells according to the flags
     given by subdiv. Subdiv should be long as the number of cells in the
     original grid, it contains integers (possibly not continuous) which
     represent the cells in the final mesh. If a grid bucket is given the
@@ -256,12 +260,12 @@ def _generate_coarse_grid_gb(gb, subdiv):
         # Construct the coarse grids
         face_map = _generate_coarse_grid_single(g, partition, True)
 
-        # Update all the master_to_mortar_int for all the 'edges' connected to the grid
+        # Update all the primary_to_mortar_int for all the 'edges' connected to the grid
         # We update also all the face_cells
         for e, d in gb.edges_of_node(g):
             # The indices that need to be mapped to the new grid
-            m2m = d["mortar_grid"].master_to_mortar_int().tocsr()
-            indices = m2m.indices
+            primary_to_mortar = d["mortar_grid"].primary_to_mortar_int().tocsr()
+            indices = primary_to_mortar.indices
 
             # Map indices
             mask = np.argsort(indices)
@@ -270,9 +274,11 @@ def _generate_coarse_grid_gb(gb, subdiv):
             indices = indices[np.argsort(mask)]
 
             # Create the new matrix
-            shape = (m2m.shape[0], g.num_faces)
-            new_m2m = sps.csr_matrix((m2m.data, indices, m2m.indptr), shape=shape)
-            d["mortar_grid"]._master_to_mortar_int = new_m2m.tocsc()
+            shape = (primary_to_mortar.shape[0], g.num_faces)
+            new_primary_to_mortar = sps.csr_matrix(
+                (primary_to_mortar.data, indices, primary_to_mortar.indptr), shape=shape
+            )
+            d["mortar_grid"]._primary_to_mortar_int = new_primary_to_mortar.tocsc()
 
             # update also the face_cells map
             face_cells = d["face_cells"].tocsr()
@@ -348,12 +354,12 @@ def generate_seeds(gb):
         index = np.in1d(faces, tips).nonzero()[0]
         cells = np.unique(cells[index])
 
-        # recover the mapping between the slave and the master grid
+        # recover the mapping between the secondary and the primary grid
         mg = gb._edges[(g_h, g)]["mortar_grid"]
-        m2m = mg.master_to_mortar_int()
-        l2m = mg.slave_to_mortar_int()
+        primary_to_mortar = mg.primary_to_mortar_int()
+        secondary_to_mortar = mg.secondary_to_mortar_int()
         # this is the old face_cells mapping
-        face_cells = l2m.T * m2m
+        face_cells = secondary_to_mortar.T * primary_to_mortar
 
         interf_cells, interf_faces, _ = sps.find(face_cells)
         index = np.in1d(interf_cells, cells).nonzero()[0]
@@ -367,7 +373,7 @@ def generate_seeds(gb):
 
 
 def create_aggregations(g, **kwargs):
-    """ Create a cell partition based on their volumes.
+    """Create a cell partition based on their volumes.
 
     Parameter:
         g: grid or grid bucket
@@ -472,8 +478,7 @@ def create_aggregations(g, **kwargs):
 
 
 def __get_neigh(cells_id, c2c, partition):
-    """ Support function for create_aggregations
-    """
+    """Support function for create_aggregations"""
     neighbors = np.empty(0, dtype=np.int)
 
     for cell_id in np.atleast_1d(cells_id):

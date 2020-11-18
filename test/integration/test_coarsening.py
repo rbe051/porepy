@@ -141,7 +141,7 @@ class BasicsTest(unittest.TestCase):
         known = np.array([1, 5, 18, 19])
 
         for _, d in gb.edges():
-            faces = sps.find(d["mortar_grid"].master_to_mortar_int())[1]
+            faces = sps.find(d["mortar_grid"].primary_to_mortar_int())[1]
             self.assertTrue(np.array_equal(faces, known))
 
     # ------------------------------------------------------------------------------#
@@ -186,7 +186,7 @@ class BasicsTest(unittest.TestCase):
 
             # Test
             for e_d in gb.edges():
-                faces = sps.find(e_d[1]["mortar_grid"].master_to_mortar_int())[1]
+                faces = sps.find(e_d[1]["mortar_grid"].primary_to_mortar_int())[1]
 
                 if (e_d[0][0].dim == 0 and e_d[0][1].dim == 1) or (
                     e_d[0][0].dim == 1 and e_d[0][1].dim == 0
@@ -221,11 +221,11 @@ class BasicsTest(unittest.TestCase):
         co.generate_coarse_grid(gb, (None, part))
 
         # Test
-        known_indices = np.array([1, 3, 0, 2, 5, 7, 4, 6])
+        known_indices = np.array([0, 2, 1, 3, 4, 6, 5, 7])
         known = np.array([1, 4, 7, 10, 44, 45, 46, 47])
 
         for _, d in gb.edges():
-            indices, faces, _ = sps.find(d["mortar_grid"].master_to_mortar_int())
+            indices, faces, _ = sps.find(d["mortar_grid"].primary_to_mortar_int())
             self.assertTrue(np.array_equal(indices, known_indices))
             self.assertTrue(np.array_equal(faces, known))
 
@@ -370,11 +370,69 @@ class BasicsTest(unittest.TestCase):
                     ],
                 ]
             )
+            cell_centers_3 = np.array(
+                [
+                    [
+                        3.0,
+                        3.0,
+                        3.0,
+                        3.0,
+                        3.0,
+                        3.0,
+                        3.0,
+                        3.0,
+                        3.0,
+                        3.0,
+                        3.0,
+                        3.0,
+                        3.0,
+                        3.0,
+                        3.0,
+                        3.0,
+                    ],
+                    [
+                        1.5,
+                        1.5,
+                        1.5,
+                        1.5,
+                        2.5,
+                        2.5,
+                        2.5,
+                        2.5,
+                        3.5,
+                        3.5,
+                        3.5,
+                        3.5,
+                        4.5,
+                        4.5,
+                        4.5,
+                        4.5,
+                    ],
+                    [
+                        1.5,
+                        2.5,
+                        3.5,
+                        4.5,
+                        1.5,
+                        2.5,
+                        3.5,
+                        4.5,
+                        1.5,
+                        2.5,
+                        3.5,
+                        4.5,
+                        1.5,
+                        2.5,
+                        3.5,
+                        4.5,
+                    ],
+                ]
+            )
 
             # Test
             for e_d in gb.edges():
                 indices, faces, _ = sps.find(
-                    e_d[1]["mortar_grid"].master_to_mortar_int()
+                    e_d[1]["mortar_grid"].primary_to_mortar_int()
                 )
 
                 if (e_d[0][0].dim == 1 and e_d[0][1].dim == 2) or (
@@ -527,8 +585,78 @@ class BasicsTest(unittest.TestCase):
                             318,
                             319,
                         ]
+                    elif np.allclose(g.cell_centers, cell_centers_3):
+                        known_indices = [
+                            0,
+                            4,
+                            8,
+                            12,
+                            1,
+                            5,
+                            9,
+                            13,
+                            2,
+                            6,
+                            10,
+                            14,
+                            3,
+                            7,
+                            11,
+                            15,
+                            16,
+                            20,
+                            24,
+                            28,
+                            17,
+                            21,
+                            25,
+                            29,
+                            18,
+                            22,
+                            26,
+                            30,
+                            19,
+                            23,
+                            27,
+                            31,
+                        ]
+                        known = [
+                            22,
+                            25,
+                            28,
+                            31,
+                            40,
+                            43,
+                            46,
+                            49,
+                            58,
+                            61,
+                            64,
+                            67,
+                            76,
+                            79,
+                            82,
+                            85,
+                            288,
+                            289,
+                            290,
+                            291,
+                            292,
+                            293,
+                            294,
+                            295,
+                            296,
+                            297,
+                            298,
+                            299,
+                            300,
+                            301,
+                            302,
+                            303,
+                        ]
                     else:
                         raise ValueError("Grid not found")
+
                 self.assertTrue(np.array_equal(indices, np.array(known_indices)))
                 self.assertTrue(np.array_equal(faces, np.array(known)))
 
@@ -764,7 +892,7 @@ class BasicsTest(unittest.TestCase):
         known = np.array([6, 7, 10, 11])
 
         for _, d in gb.edges():
-            indices, faces, _ = sps.find(d["mortar_grid"].master_to_mortar_int())
+            indices, faces, _ = sps.find(d["mortar_grid"].primary_to_mortar_int())
             self.assertTrue(np.array_equal(faces, known))
             self.assertTrue(np.array_equal(indices, known_indices))
 
@@ -783,7 +911,7 @@ class BasicsTest(unittest.TestCase):
         known = np.array([6, 9])
 
         for _, d in gb.edges():
-            indices, faces, _ = sps.find(d["mortar_grid"].master_to_mortar_int())
+            indices, faces, _ = sps.find(d["mortar_grid"].primary_to_mortar_int())
             self.assertTrue(np.array_equal(faces, known))
             self.assertTrue(np.array_equal(indices, known_indices))
 
@@ -806,7 +934,7 @@ class BasicsTest(unittest.TestCase):
         known = np.array([6, 10])
 
         for _, d in gb.edges():
-            indices, faces, _ = sps.find(d["mortar_grid"].master_to_mortar_int())
+            indices, faces, _ = sps.find(d["mortar_grid"].primary_to_mortar_int())
             self.assertTrue(np.array_equal(faces, known))
             self.assertTrue(np.array_equal(indices, known_indices))
 
@@ -825,7 +953,7 @@ class BasicsTest(unittest.TestCase):
         known = np.array([6, 9])
 
         for _, d in gb.edges():
-            indices, faces, _ = sps.find(d["mortar_grid"].master_to_mortar_int())
+            indices, faces, _ = sps.find(d["mortar_grid"].primary_to_mortar_int())
             self.assertTrue(np.array_equal(faces, known))
             self.assertTrue(np.array_equal(indices, known_indices))
 
@@ -848,7 +976,7 @@ class BasicsTest(unittest.TestCase):
         known = np.array([7, 10])
 
         for _, d in gb.edges():
-            indices, faces, _ = sps.find(d["mortar_grid"].master_to_mortar_int())
+            indices, faces, _ = sps.find(d["mortar_grid"].primary_to_mortar_int())
             self.assertTrue(np.array_equal(faces, known))
             self.assertTrue(np.array_equal(indices, known_indices))
 
@@ -884,7 +1012,7 @@ class BasicsTest(unittest.TestCase):
             # Test
             for e_d in gb.edges():
                 indices, faces, _ = sps.find(
-                    e_d[1]["mortar_grid"].master_to_mortar_int()
+                    e_d[1]["mortar_grid"].primary_to_mortar_int()
                 )
 
                 if (e_d[0][0].dim == 0 and e_d[0][1].dim == 1) or (
@@ -947,7 +1075,7 @@ class BasicsTest(unittest.TestCase):
             # Test
             for e_d in gb.edges():
                 indices, faces, _ = sps.find(
-                    e_d[1]["mortar_grid"].master_to_mortar_int()
+                    e_d[1]["mortar_grid"].primary_to_mortar_int()
                 )
 
                 if (e_d[0][0].dim == 0 and e_d[0][1].dim == 1) or (
@@ -1125,7 +1253,7 @@ class BasicsTest(unittest.TestCase):
             # Test
             for e_d in gb.edges():
                 indices, faces, _ = sps.find(
-                    e_d[1]["mortar_grid"].master_to_mortar_int()
+                    e_d[1]["mortar_grid"].primary_to_mortar_int()
                 )
 
                 if (e_d[0][0].dim == 0 and e_d[0][1].dim == 1) or (

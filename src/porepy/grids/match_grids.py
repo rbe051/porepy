@@ -1,19 +1,20 @@
 """
 Module contains various functions to find overlaps between grid cells.
 """
-import porepy as pp
-import numpy as np
-import scipy.sparse as sps
 import logging
 
-from porepy.utils.setmembership import ismember_rows, unique_columns_tol
+import numpy as np
+import scipy.sparse as sps
+
+import porepy as pp
 from porepy.grids.structured import TensorGrid
+from porepy.utils.setmembership import ismember_rows, unique_columns_tol
 
 logger = logging.getLogger(__name__)
 
 
 def match_1d(new_1d: pp.Grid, old_1d: pp.Grid, tol: float):
-    """ Obtain mappings between the cells of non-matching 1d grids.
+    """Obtain mappings between the cells of non-matching 1d grids.
 
     The function constructs an refined 1d grid that consists of all nodes
     of at least one of the input grids.
@@ -80,7 +81,7 @@ def match_1d(new_1d: pp.Grid, old_1d: pp.Grid, tol: float):
 
 
 def match_2d(new_g: pp.Grid, old_g: pp.Grid, tol: float):
-    """ Match two simplex tessalations to identify overlapping cells.
+    """Match two simplex tessalations to identify overlapping cells.
 
     The overlaps are identified by the cell index of the two overlapping cells,
     and their weighted common area.
@@ -137,7 +138,7 @@ def match_2d(new_g: pp.Grid, old_g: pp.Grid, tol: float):
 def match_grids_along_1d_mortar(
     mg: pp.MortarGrid, g_new: pp.Grid, g_old: pp.Grid, tol: float
 ) -> sps.csr_matrix:
-    """ Match the faces of two 2d grids along a 1d mortar grid.
+    """Match the faces of two 2d grids along a 1d mortar grid.
 
     The function identifies faces on the 1d segment specified by the MortarGrid, and
     finds the area weights of the matched faces. Both sides of the mortar grid are taken
@@ -149,14 +150,14 @@ def match_grids_along_1d_mortar(
         g_new (pp.Grid): New 2d grid. Should have faces split along the 1d line.
             Dimension 2.
         g_old (pp.Grid): Old 2d grid. Dimension 2. The mappings in mg from mortar to
-            master should be set for this grid.
+            primary should be set for this grid.
         tol (double): Tolerance used in comparison of geometric quantities.
 
     Raises:
         ValueError: If the matching procedure goes wrong.
 
     Returns:
-        sps.csr_matrix: Matrix that can be used to update mg._master_to_mortar_int.
+        sps.csr_matrix: Matrix that can be used to update mg._primary_to_mortar_int.
 
     """
 
@@ -248,8 +249,7 @@ def match_grids_along_1d_mortar(
 
     # First create a virtual 1d grid along the line, using nodes from the old grid
     # Identify faces in the old grid that is on the boundary
-    _, faces_on_boundary_old, _ = sps.find(mg._master_to_mortar_int)
-    faces_on_boundary_old = np.unique(faces_on_boundary_old)
+    _, faces_on_boundary_old, _ = sps.find(mg._primary_to_mortar_int)
     # Find the nodes of those faces
     nodes_on_boundary_old = nodes_of_faces(g_old, faces_on_boundary_old)
     nodes_1d_old = g_old.nodes[:, nodes_on_boundary_old]
@@ -394,7 +394,7 @@ def match_grids_along_1d_mortar(
 def gb_refinement(
     gb: pp.GridBucket, gb_ref: pp.GridBucket, tol: float = 1e-8, mode: str = "nested"
 ):
-    """ Wrapper for coarse_fine_cell_mapping to construct mapping for grids in
+    """Wrapper for coarse_fine_cell_mapping to construct mapping for grids in
     GridBucket.
 
     Adds a node_prop to each grid in gb. The key is 'coarse_fine_cell_mapping',
@@ -459,7 +459,7 @@ def gb_refinement(
 def structured_refinement(
     g: pp.Grid, g_ref: pp.Grid, point_in_poly_tol=1e-8
 ) -> sps.csc_matrix:
-    """ Construct a mapping between cells of a grid and its refined version
+    """Construct a mapping between cells of a grid and its refined version
 
     Assuming a regular and a refined mesh, where the refinement is executed by
     splitting.
