@@ -466,11 +466,11 @@ class CartLeafGrid(pp.CartGrid):
 
         # For periodic faces, we add the faces if either side of the
         # periodic boundary is active.
-        if hasattr(self, "per_map"):
-            per_map = self.level_grids[level].per_map
-            per_faces = active_faces[per_map[0]] | active_faces[per_map[1]]
-            active_faces[per_map[0]] = per_faces
-            active_faces[per_map[1]] = per_faces
+        if hasattr(self, "periodic_face_map"):
+            periodic_face_map = self.level_grids[level].periodic_face_map
+            per_faces = active_faces[periodic_face_map[0]] | active_faces[periodic_face_map[1]]
+            active_faces[periodic_face_map[0]] = per_faces
+            active_faces[periodic_face_map[1]] = per_faces
         # For fracture faces, we add the faces if either side of the
         # fracture boundary is active.
         if hasattr(self, "frac_pairs"):
@@ -491,13 +491,13 @@ class CartLeafGrid(pp.CartGrid):
             ) > 0
             # For periodic faces or fracture faces, we add the faces if either
             # side of the boundary is active.
-            if hasattr(self, "per_map"):
-                per_map_fine = self.level_grids[level + 1].per_map
+            if hasattr(self, "periodic_face_map"):
+                periodic_face_map_fine = self.level_grids[level + 1].periodic_face_map
                 per_faces_fine = (
-                    faces_fine[per_map_fine[0]] | faces_fine[per_map_fine[1]]
+                    faces_fine[periodic_face_map_fine[0]] | faces_fine[periodic_face_map_fine[1]]
                 )
-                faces_fine[per_map_fine[0]] = per_faces_fine
-                faces_fine[per_map_fine[1]] = per_faces_fine
+                faces_fine[periodic_face_map_fine[0]] = per_faces_fine
+                faces_fine[periodic_face_map_fine[1]] = per_faces_fine
             if hasattr(self, "frac_pairs"):
                 frac_map_fine = self.level_grids[level + 1].frac_pairs
                 frac_faces_fine = (
@@ -606,12 +606,12 @@ class CartLeafGrid(pp.CartGrid):
             ]
         )
 
-        if hasattr(self, "per_map"):
-            self.per_map = np.ones((2, 0), dtype=int)
+        if hasattr(self, "periodic_face_map"):
+            self.periodic_face_map = np.ones((2, 0), dtype=int)
             for level in range(self.num_levels):
                 active_faces = self.active_faces[level]
-                left_idx = self.level_grids[level].per_map[0]
-                right_idx = self.level_grids[level].per_map[1]
+                left_idx = self.level_grids[level].periodic_face_map[0]
+                right_idx = self.level_grids[level].periodic_face_map[1]
                 # The left faces and right faces must be given in strictly
                 # increasing order. The reason for this is that when we map them
                 # to the leaf grid using boolean arrays, we loose the ordering.
@@ -633,8 +633,8 @@ class CartLeafGrid(pp.CartGrid):
                 left_leaf = np.argwhere(level_to_leaf * left_level).ravel()
                 right_leaf = np.argwhere(level_to_leaf * right_level).ravel()
 
-                per_map_level = np.vstack((left_leaf, right_leaf))
-                self.per_map = np.c_[self.per_map, per_map_level]
+                periodic_face_map_level = np.vstack((left_leaf, right_leaf))
+                self.periodic_face_map = np.c_[self.periodic_face_map, periodic_face_map_level]
 
     def update_face_prop(self, old_to_new_face):
         for key in self.tags.keys():
@@ -723,14 +723,14 @@ class CartLeafGrid(pp.CartGrid):
             # Project to faces and back to cells to get neighbour cells
             neighbour_mapping = np.abs(self.cell_faces.T) * np.abs(self.cell_faces)
             # Refine over periodic boundary:
-            if hasattr(self, "per_map"):
+            if hasattr(self, "periodic_face_map"):
                 is_left = np.zeros(self.num_faces, dtype=bool)
                 is_right = np.zeros(self.num_faces, dtype=bool)
-                is_left[self.per_map[0]] = True
-                is_right[self.per_map[1]] = True
-                col = self.per_map[0]
-                row = self.per_map[1]
-                data = np.ones(self.per_map.shape[1], dtype=bool)
+                is_left[self.periodic_face_map[0]] = True
+                is_right[self.periodic_face_map[1]] = True
+                col = self.periodic_face_map[0]
+                row = self.periodic_face_map[1]
+                data = np.ones(self.periodic_face_map.shape[1], dtype=bool)
                 shape = (self.num_faces, self.num_faces)
                 left_to_right = sps.coo_matrix((data, (row, col)), shape=shape)
                 per_face_map = left_to_right + left_to_right.T
@@ -787,14 +787,14 @@ class CartLeafGrid(pp.CartGrid):
             # Project to faces and back to cells to get neighbour cells
             neighbour_mapping = np.abs(self.cell_faces.T) * np.abs(self.cell_faces)
             # Add neighbourship over periodic boundary:
-            if hasattr(self, "per_map"):
+            if hasattr(self, "periodic_face_map"):
                 is_left = np.zeros(self.num_faces, dtype=bool)
                 is_right = np.zeros(self.num_faces, dtype=bool)
-                is_left[self.per_map[0]] = True
-                is_right[self.per_map[1]] = True
-                col = self.per_map[0]
-                row = self.per_map[1]
-                data = np.ones(self.per_map.shape[1], dtype=bool)
+                is_left[self.periodic_face_map[0]] = True
+                is_right[self.periodic_face_map[1]] = True
+                col = self.periodic_face_map[0]
+                row = self.periodic_face_map[1]
+                data = np.ones(self.periodic_face_map.shape[1], dtype=bool)
                 shape = (self.num_faces, self.num_faces)
                 left_to_right = sps.coo_matrix((data, (row, col)), shape=shape)
                 per_face_map = left_to_right + left_to_right.T
@@ -968,7 +968,7 @@ if __name__ == "__main__":
     for level in range(lg.num_levels):
         left = np.argwhere(lg.level_grids[level].face_centers[1] < 1e-5).ravel()
         right = np.argwhere(lg.level_grids[level].face_centers[1] > 1 - 1e-5).ravel()
-        lg.level_grids[level].per_map = np.vstack((left, right))
+        lg.level_grids[level].periodic_face_map = np.vstack((left, right))
 
     tic = time.time()
     tag = (0.3 < lg.cell_centers[0]) & (lg.cell_centers[0] < 0.7)
@@ -990,12 +990,12 @@ if __name__ == "__main__":
         plt.plot(lg.face_centers[0], lg.face_centers[1], "x")
         plt.show()
 
-    print(lg.per_map)
+    print(lg.periodic_face_map)
     pp.plot_grid(lg, info="f", alpha=0, if_plot=False)
     ax = plt.gca()
     plt.axis("off")
     plt.show()
-    left = lg.per_map[0]
-    right = lg.per_map[1]
+    left = lg.periodic_face_map[0]
+    right = lg.periodic_face_map[1]
     lg.face_centers[:, left]
     lg.face_centers[:, right]
